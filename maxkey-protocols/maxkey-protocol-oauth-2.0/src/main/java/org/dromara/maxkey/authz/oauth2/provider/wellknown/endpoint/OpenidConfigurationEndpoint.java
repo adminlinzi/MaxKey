@@ -120,6 +120,9 @@ public class OpenidConfigurationEndpoint extends AbstractEndpoint {
             openidConfig.setGrant_types_supported(clientDetails.getAuthorizedGrantTypes());
             openidConfig.setClaims_supported(clientDetails.getScope());
             
+            Set<String> subject_types_supported = new HashSet<>();
+            subject_types_supported.add("public");
+            openidConfig.setSubject_types_supported(subject_types_supported);
             
             Set<String>  id_token_signing_alg_values_supported = new HashSet<String>();
             id_token_signing_alg_values_supported.add(clientDetails.getSignature().toUpperCase());
