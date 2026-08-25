@@ -228,4 +228,5 @@ jobs:
 
       - name: kubectl apply --dry-run
         shell: bash
-        run: kubectl apply --dry-run=client -k deploy/k8s/overlays/dev
+        # CI 无 K8s 集群，加 --validate=false 避免 kubectl 去连 localhost:8080 下载 OpenAPI schema
+        run: kubectl apply --dry-run=client --validate=false -k deploy/k8s/overlays/dev
