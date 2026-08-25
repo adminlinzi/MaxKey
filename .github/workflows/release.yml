@@ -160,6 +160,17 @@ jobs:
         with:
           config: deploy/k8s/kind/kind.yaml
           wait: 180s
+      # kind 默认集群名 chart-testing；预先拉取 Docker Hub 公共镜像并加载到 kind 节点，
+      # 避免 GitHub Actions 网络到 Docker Hub 超时/限流导致 mysql/nginx 拉取失败。
+      - name: Preload public images into kind
+        shell: bash
+        run: |
+          kind_cluster=$(kind get clusters | head -n 1)
+          echo "Kind cluster: ${kind_cluster}"
+          docker pull mysql:8.4.2
+          kind load docker-image mysql:8.4.2 --name "${kind_cluster}"
+          docker pull nginx:stable
+          kind load docker-image nginx:stable --name "${kind_cluster}"
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
       - name: Install kustomize
@@ -180,7 +191,22 @@ jobs:
       - name: Wait for rollout
         run: |
           for d in mysql maxkey maxkey-mgt maxkey-openapi maxkey-frontend maxkey-mgt-frontend maxkey-nginx; do
-            kubectl -n maxkey rollout status "deploy/$d" --timeout=420s
+            kubectl -n maxkey rollout status "deploy/$d" --timeout=600s
+          done
+      - name: Debug on rollout failure
+        if: failure()
+        shell: bash
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods -n maxkey -o wide
+          echo "=== Events ==="
+          kubectl get events -n maxkey --sort-by=.lastTimestamp
+          for d in mysql maxkey maxkey-mgt maxkey-openapi maxkey-frontend maxkey-mgt-frontend maxkey-nginx; do
+            echo "=== Deployment $d ==="
+            kubectl -n maxkey describe deploy "$d" || true
+            echo "=== Logs for $d ==="
+            kubectl -n maxkey logs -l "app=$d" --tail=200 || true
+            kubectl -n maxkey logs -l "app=$d" --tail=200 --previous || true
           done
       - name: Smoke test via nginx (NodePort 30080 -> host 80)
         run: |

@@ -18,6 +18,7 @@ spec:
       containers:
         - name: mysql
           image: mysql:8.4.2
+          imagePullPolicy: IfNotPresent
           env:
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
@@ -30,6 +31,8 @@ spec:
             - mysqld
             - --character-set-server=utf8mb4
             - --collation-server=utf8mb4_unicode_ci
+            - --explicit-defaults-for-timestamp=1
+            - --default-authentication-plugin=mysql_native_password
           ports:
             - containerPort: 3306
           volumeMounts:
@@ -43,23 +46,40 @@ spec:
             - name: conf
               mountPath: /etc/mysql/conf.d
               readOnly: true
-          readinessProbe:
-            tcpSocket:
-              port: 3306
-            initialDelaySeconds: 15
-            periodSeconds: 10
-          livenessProbe:
-            tcpSocket:
-              port: 3306
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - 'mysqladmin ping -uroot -p"$MYSQL_ROOT_PASSWORD" --silent'
             initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - 'mysqladmin ping -uroot -p"$MYSQL_ROOT_PASSWORD" --silent'
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - 'mysqladmin ping -uroot -p"$MYSQL_ROOT_PASSWORD" --silent'
+            initialDelaySeconds: 60
             periodSeconds: 20
+            failureThreshold: 6
           resources:
             requests:
-              cpu: 250m
-              memory: 512Mi
-            limits:
-              cpu: "1"
+              cpu: 500m
               memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 2Gi
       volumes:
         - name: data
           persistentVolumeClaim:
