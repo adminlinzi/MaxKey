@@ -98,12 +98,33 @@ jobs:
         with:
           name: frontend-dist
           path: .
+      - name: Stage backend jar
+        if: contains(matrix.name, 'maxkey') && matrix.name != 'maxkey-frontend' && matrix.name != 'maxkey-mgt-frontend'
+        shell: bash
+        run: |
+          rm -rf "${{ matrix.context }}/build/libs"
+          mkdir -p "${{ matrix.context }}/build/libs"
+          jar_file=$(find . -type f -name '${{ matrix.name }}-boot-*-ga.jar' | head -n 1)
+          if [ -z "$jar_file" ]; then
+            echo "::error::Could not find ${{ matrix.name }}-boot-*-ga.jar artifact"
+            exit 1
+          fi
+          cp "$jar_file" "${{ matrix.context }}/build/libs/"
+          ls -la "${{ matrix.context }}/build/libs/"
       - name: Stage frontend dist
         if: matrix.name == 'maxkey-frontend' || matrix.name == 'maxkey-mgt-frontend'
+        shell: bash
         run: |
           rm -rf deploy/docker/frontend/dist deploy/docker/mgt-frontend/dist
-          cp -r maxkey-web-frontend/maxkey-web-app/dist deploy/docker/frontend/dist
-          cp -r maxkey-web-frontend/maxkey-web-mgt-app/dist deploy/docker/mgt-frontend/dist
+          app_dist=$(find . -type d -path '*/maxkey-web-app/dist' | head -n 1)
+          mgt_dist=$(find . -type d -path '*/maxkey-web-mgt-app/dist' | head -n 1)
+          if [ -z "$app_dist" ] || [ -z "$mgt_dist" ]; then
+            echo "::error::Could not find frontend dist directories"
+            exit 1
+          fi
+          cp -r "$app_dist" deploy/docker/frontend/dist
+          cp -r "$mgt_dist" deploy/docker/mgt-frontend/dist
+          ls -la deploy/docker/frontend/dist deploy/docker/mgt-frontend/dist
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
