@@ -1,12 +1,49 @@
 # Changelog
 
 All notable changes to MaxKey will be documented in this file.
+## [Unreleased]
 
-> 本文件由 `git-cliff` 基于 Conventional Commits 自动生成与维护，合并到 `main` 后由
-> `.github/workflows/docs.yml` 回写。请勿手工大规模编辑，提交请遵循 `feat:` / `fix:` / `docs:` 规范。
 
-## [4.2.0] - 2026-08-25
+### Bug Fixes
 
-- 新增 GitHub Actions 流水线（docs / ci / release）与独立 `deploy/` 部署目录（docker + k8s kustomize）
-- 修正后端运行镜像为 `eclipse-temurin:21-jre`（原 17 与 JDK 21 构建产物不兼容）
-- 前端构建固定使用 Node 16（Angular 13 要求）
+- 退出重定向回登录页面问题
+- 退出重定向回登录页面问题
+- Https://gitee.com/dromara/MaxKey/issues/I5X10K
+- Https://gitee.com/dromara/MaxKey/issues/I5X10K
+- 修复判断字符串是否为YES始终为false
+- 修复PasskeyRegistrationEndpoint中@PathVariable注解缺少value属性的问题
+- 修复因为 ssl 配置未生效致使使用qq邮箱配置时, 选择ssl端口无法发送并报ssl异常问题
+- 接口需要禁止删除组织 Organizations#ROOT_ORG_ID 否则会导致同步器工作异常
+- 修复机构配置修改后缓存没有清空，导致界面上看上去 修改失败了
+- Handle null version in git-cliff template for main branch changelog
+- Kubectl dry-run without K8s cluster; guard null timestamp in cliff template
+
+### Features
+
+- 添加Passkey WebAuthn支持模块
+- 优化passkey模块配置和依赖管理
+- 实现 passkey 登录注册功能前端支持
+
+### Miscellaneous Tasks
+
+- Add SECURITY.md (private vulnerability reporting policy)
+
+### Refactor
+
+- 将passkey实体类迁移到正确的包路径下
+
+### Signed-off-by
+
+- MaxKey <shimingxy@qq.com>
+
+### Eclipse-temurin
+
+- 17-jdk-alpine
+
+### IOS
+
+- 声明摄像头权限、把应用名改成 MaxKey
+
+### Vuln-fix
+
+- Temporary File Information Disclosure
