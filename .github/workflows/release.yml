@@ -163,9 +163,12 @@ jobs:
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
       - name: Install kustomize
-        uses: taiki-e/install-action@v2
-        with:
-          tool: kustomize
+        shell: bash
+        run: |
+          curl -sL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.3/kustomize_v5.4.3_linux_amd64.tar.gz" | tar xz
+          chmod +x kustomize
+          sudo mv kustomize /usr/local/bin/
+          kustomize version
       - name: Pin image tags in dev overlay
         run: |
           cd deploy/k8s/overlays/dev
