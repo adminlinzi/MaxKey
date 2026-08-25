@@ -272,10 +272,19 @@ jobs:
         run: |
           docker compose -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.local.yml down -v || true
 
-      - name: Validate k8s manifests (dry-run)
+      - name: Set up kubectl
         uses: azure/setup-kubectl@v4
+
+      - name: Install kustomize
+        shell: bash
+        run: |
+          curl -sL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.3/kustomize_v5.4.3_linux_amd64.tar.gz" | tar xz
+          chmod +x kustomize
+          sudo mv kustomize /usr/local/bin/
+          kustomize version
 
       - name: kubectl apply --dry-run
         shell: bash
-        # CI 无 K8s 集群，加 --validate=false 避免 kubectl 去连 localhost:8080 下载 OpenAPI schema
-        run: kubectl apply --dry-run=client --validate=false -k deploy/k8s/overlays/dev
+        # CI 无 K8s 集群。kubectl apply -k 仍会触发 API discovery，因此改为：
+        # kustomize build 生成纯 YAML 后，再由 kubectl 做客户端 dry-run（--validate=false）。
+        run: kustomize build deploy/k8s/overlays/dev | kubectl apply --dry-run=client --validate=false -f -

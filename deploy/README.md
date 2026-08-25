@@ -1,6 +1,10 @@
 # MaxKey 部署指南（deploy/）
 
+## 一、说明
+
 本目录集中存放经过 CI 实测的部署文件，与上游 `deployment/` 互不干扰。
+
+### 1.1 目录结构
 
 ```
 deploy/
@@ -17,7 +21,7 @@ deploy/
     └── kind/kind.yaml              # 本地 kind 集群配置（CI 实部署验证用）
 ```
 
-## 一、镜像清单（GitHub 容器仓库 GHCR）
+### 1.2 镜像清单（GitHub 容器仓库 GHCR）
 
 | 镜像 | 端口 | 说明 |
 | --- | --- | --- |
@@ -27,33 +31,71 @@ deploy/
 | `ghcr.io/<owner>/maxkey-frontend` | 8527 | 认证前端（静态） |
 | `ghcr.io/<owner>/maxkey-mgt-frontend` | 8526 | 管理前端（静态） |
 
-`<owner>` 为 GitHub 仓库所有者（本仓库为 `adminlinzi`）。CI 推送的标签：release 为 `语义版本`（如 `4.2.0`）、`latest`、`sha-<commit>`；manual-build 为 `dev-<分支>-<sha>`、`sha-<commit>`。
+`<owner>` 为 GitHub 仓库所有者（本仓库为 `adminlinzi`）。
 
 > 注：`maxkey-gateway` 模块在当前源码中为未完成 stub（无 bootJar、网关依赖已注释），**不提供镜像**。
 
-## 二、Docker 单机部署
+### 1.3 前置条件
 
-前置：Docker Engine 与 Docker Compose v2。
+- Docker Engine + Docker Compose v2（Docker 单机方案）
+- kubectl + kustomize（Kubernetes 方案）
+- kind（可选，本地 kind 实部署验证）
+
+---
+
+## 二、配置
+
+### 2.1 镜像标签
+
+CI 推送的标签规则：
+
+| 触发方式 | 标签 | 用途 |
+| --- | --- | --- |
+| Release tag（如 `4.2.0`） | `<version>`、`latest`、`sha-<commit>` | 正式发版 |
+| Manual Build（未发版） | `dev-<分支>-<短sha>`、`sha-<commit>` | 临时验证/小规模改动 |
+
+### 2.2 环境变量
+
+Docker Compose 通过环境变量注入镜像前缀与版本：
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `GHCR` | `ghcr.io/adminlinzi` | 镜像仓库前缀 |
+| `MXK_VERSION` | `4.2.0`（取自 `gradle.properties`） | 镜像标签 |
+
+### 2.3 数据库凭据
+
+- **Docker Compose**：在 `deploy/docker/docker-compose.yml` 中通过环境变量 `MYSQL_ROOT_PASSWORD`、`DATABASE_PWD` 配置。
+- **Kubernetes**：在 `deploy/k8s/base/secrets.yaml` 中配置。
+
+> **警告**：默认凭据为 `root / maxkey`，**仅用于本地/测试**。生产环境务必修改，并使用 Sealed Secrets / External Secrets / CSI 驱动管理密钥，不要将明文密钥提交到仓库。
+
+### 2.4 MySQL 初始化
+
+首次启动 MySQL 时会自动执行 `deploy/docker/mysql/docker-entrypoint-initdb.d/` 下的 SQL：
+
+1. `init.sql`：创建 `maxkey` 数据库。
+2. `latest/maxkey.sql`：导入 MaxKey 初始表结构与数据（约 11MB）。
+
+> **K8s 注意**：`base/mysql/mysql-deployment.yaml` 使用 `hostPath` 挂载初始化 SQL，**仅适用于 kind/单机测试**。生产环境请改用托管数据库，或通过 db-init Job 加载初始化 SQL。
+
+---
+
+## 三、部署
+
+### 3.1 Docker 单机部署
 
 ```bash
-# 默认从 GHCR 拉取当前版本（MXK_VERSION 默认 4.2.0，可覆盖）
+# 使用默认版本（MXK_VERSION 默认 4.2.0，可覆盖）
 export MXK_VERSION=4.2.0
 docker compose -f deploy/docker/docker-compose.yml up -d
 
 # 查看状态
 docker compose -f deploy/docker/docker-compose.yml ps
 docker compose -f deploy/docker/docker-compose.yml logs -f maxkey
-
-# 访问：浏览器打开 http://<宿主机>/sign/  （认证端），/maxkey/ （认证前端）
 ```
 
-- 数据库：内置 MySQL 8.4.2，首次启动自动执行 `deploy/docker/mysql` 下的初始化 SQL。
-- 网关：`maxkey-nginx` 在 80 端口统一代理 `/sign/`、`/maxkey/`、`/maxkey-mgt-api/`、`/maxkey-mgt/`、`/maxkey-openapi/`。
-- 凭据：默认 `root / maxkey`，仅用于测试，生产请修改 `deploy/docker/docker-compose.yml` 中的环境变量与 MySQL 密码。
-
-## 三、Kubernetes 部署（kustomize）
-
-前置：kubectl + kustomize（或 kubectl v1.14+ 内置 kustomize）。
+### 3.2 Kubernetes 部署
 
 ```bash
 # 开发环境（固定标签 4.2.0）
@@ -66,42 +108,90 @@ kubectl apply -k .
 
 # 查看
 kubectl -n maxkey get all
-# 网关 NodePort 30080，配合云厂商 LoadBalancer/Ingress 对外暴露
-kubectl -n maxkey get svc maxkey-nginx
 ```
 
-- MySQL：`base/mysql` 使用 hostPath 挂载初始化 SQL，**仅适用于 kind/单机测试**。生产请改用托管数据库或 db-init Job，并将 `hostPath` 替换为你的持久化/初始化方案。
-- 密钥：`base/secrets.yaml` 为明文占位，**生产务必替换为 Sealed Secrets / External Secrets / CSI 驱动**。
-
-### 本地 kind 实部署验证
+### 3.3 本地 kind 实部署验证
 
 ```bash
+# 创建 kind 集群（自动挂载 MySQL 初始化 SQL 与配置）
 kind create cluster --config deploy/k8s/kind/kind.yaml
+
+# 设置镜像标签并部署
 cd deploy/k8s/overlays/dev
 for s in maxkey maxkey-mgt maxkey-openapi maxkey-frontend maxkey-mgt-frontend; do
   kustomize edit set image "$s=ghcr.io/<owner>/$s:4.2.0"
 done
 kubectl apply -k .
-kubectl -n maxkey rollout status deploy/maxkey --timeout=420s
-curl -f http://localhost/sign/      # kind 已将 NodePort 30080 映射到本机 80
+
+# 等待全部 rollout 完成
+kubectl -n maxkey rollout status deploy/mysql --timeout=600s
+kubectl -n maxkey rollout status deploy/maxkey --timeout=600s
 ```
 
-## 四、CI/CD 流程（GitHub Actions）
+---
+
+## 四、访问测试
+
+### 4.1 服务入口
+
+| 入口 | 路径 | 后端服务 |
+| --- | --- | --- |
+| 认证端 | `/sign/` | maxkey:9527 |
+| 认证前端 | `/maxkey/` | maxkey-frontend:8527 |
+| 管理端 API | `/maxkey-mgt-api/` | maxkey-mgt:9526 |
+| 管理前端 | `/maxkey-mgt/` | maxkey-mgt-frontend:8526 |
+| OpenAPI | `/maxkey-openapi/` | maxkey-openapi:9525 |
+
+### 4.2 Docker 单机访问测试
+
+```bash
+# 通过 nginx 网关访问（默认 80 端口）
+curl -f http://localhost/sign/
+curl -f http://localhost/maxkey/
+curl -f http://localhost/maxkey-mgt/
+```
+
+### 4.3 Kubernetes / kind 访问测试
+
+`maxkey-nginx` Service 使用 NodePort 30080，kind 已将其映射到本机 80：
+
+```bash
+kubectl -n maxkey get svc maxkey-nginx
+
+# 本机直接访问
+curl -f http://localhost/sign/
+curl -f http://localhost/maxkey/
+curl -f http://localhost/maxkey-mgt/
+```
+
+### 4.4 各服务健康检查
+
+| 服务 | 检查方式 | 预期结果 |
+| --- | --- | --- |
+| mysql | `mysqladmin ping` | `mysqld is alive` |
+| maxkey | TCP 9527 | 端口可连接 |
+| maxkey-mgt | TCP 9526 | 端口可连接 |
+| maxkey-openapi | TCP 9525 | 端口可连接 |
+| maxkey-frontend | HTTP 8527 | 200 |
+| maxkey-mgt-frontend | HTTP 8526 | 200 |
+| maxkey-nginx | HTTP 80 | 200 / 302 |
+
+### 4.5 CI/CD 流程
 
 | 工作流 | 触发 | 职责 |
 | --- | --- | --- |
 | `.github/workflows/docs.yml` | PR / push main | 校验文档版本一致性；合并到 main 后用 git-cliff 回写 `CHANGELOG.md` |
-| `.github/workflows/ci.yml` | PR / push main / 手动 | 构建产物 → 本地构建镜像 → `docker-compose` 冒烟 → `kubectl apply --dry-run` 校验 k8s 清单 |
+| `.github/workflows/ci.yml` | PR / push main / 手动 | 构建产物 → 本地构建镜像 → `docker-compose` 冒烟 → `kustomize build | kubectl apply --dry-run=client` 校验 k8s 清单 |
 | `.github/workflows/release.yml` | 推送语义化 tag（如 `4.2.0`） | 多架构构建并推送 GHCR → kind 实部署验证 → 创建 GitHub Release 并上传制品 |
 | `.github/workflows/manual-build.yml` | 手动 `workflow_dispatch` | 少量改动未发版：构建产物 → 多架构推送 GHCR（`dev-<分支>-<sha>`，不建 Release）→ 可选 `docker-compose` 冒烟 |
 
-### 手动构建（未发版）
+### 4.6 手动构建（未发版）
 
 少量代码修改、尚不想打版本 tag 时，可在仓库 **Actions → Manual Build → Run workflow** 手动触发：
 
 - 默认在 `dev-<分支名>-<短sha>` 标签下多架构推送 5 个镜像到 GHCR（另打 `sha-<commit>`），**不创建 GitHub Release**。
 - 支持三个输入项（均可留默认）：
-  - `image_tag`：自定义镜像标签，留空则自动生成 `dev-<分支>-<短sha>`（分支名中的 `/` 会替换为 `-`）。
+  - `image_tag`：自定义镜像标签，留空则自动生成 `dev-<分支>-<短sha>`。
   - `push_images`：是否推送镜像（默认 `true`；设为 `false` 则只构建不推送）。
   - `smoke_test`：是否运行 `docker-compose` 本地冒烟（默认 `true`）。
 
