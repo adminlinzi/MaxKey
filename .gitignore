@@ -61,3 +61,7 @@ maxkey-web-frontend/maxkey-web-app/dist
 # CI 临时生成的部署前端构建产物（由 scripts/check-docs.sh 与构建流水线产出）
 deploy/docker/frontend/dist/
 deploy/docker/mgt-frontend/dist/
+
+# GitHub Actions 本地 composite action（目录名 build 会被上面 **/build 规则误伤，需显式解除）
+!.github/actions/build/
+!.github/actions/build/**
