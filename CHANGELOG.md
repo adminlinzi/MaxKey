@@ -1,6 +1,16 @@
 # Changelog
 
 All notable changes to MaxKey will be documented in this file.
+## [Unreleased]
+
+
+### Bug Fixes
+
+- Install kustomize from GitHub release instead of cargo-binstall
+
+### Miscellaneous Tasks
+
+- Enforce LF line endings
 ## [4.2.0] - 2026-08-25
 
 
