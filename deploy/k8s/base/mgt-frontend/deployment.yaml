@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: maxkey-mgt-frontend
+  namespace: maxkey
+  labels:
+    app: maxkey-mgt-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: maxkey-mgt-frontend
+  template:
+    metadata:
+      labels:
+        app: maxkey-mgt-frontend
+    spec:
+      containers:
+        - name: maxkey-mgt-frontend
+          image: maxkey-mgt-frontend
+          ports:
+            - containerPort: 8526
+          readinessProbe:
+            tcpSocket:
+              port: 8526
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

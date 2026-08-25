@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: maxkey-frontend
+  namespace: maxkey
+  labels:
+    app: maxkey-frontend
+spec:
+  selector:
+    app: maxkey-frontend
+  ports:
+    - name: http
+      port: 8527
+      targetPort: 8527
+  type: ClusterIP

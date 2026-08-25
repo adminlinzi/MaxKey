@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: maxkey
+  labels:
+    app: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.4.2
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: maxkey-secrets
+                  key: MYSQL_ROOT_PASSWORD
+            - name: TZ
+              value: Asia/Shanghai
+          command:
+            - mysqld
+            - --character-set-server=utf8mb4
+            - --collation-server=utf8mb4_unicode_ci
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+            # 注：hostPath 仅用于 kind 本地实部署验证。生产环境请改用托管数据库，
+            # 或通过 db-init Job 加载 deploy/docker/mysql 下的初始化 SQL。
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: conf
+              mountPath: /etc/mysql/conf.d
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              port: 3306
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 3306
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mysql-data
+        - name: initdb
+          hostPath:
+            path: /mnt/maxkey-mysql-init
+            type: DirectoryOrCreate
+        - name: conf
+          hostPath:
+            path: /mnt/maxkey-mysql-conf
+            type: DirectoryOrCreate

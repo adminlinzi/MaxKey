@@ -1,0 +1,19 @@
+# kind 本地集群配置，供 CI 实部署验证使用。
+# 通过 extraMounts 把本机 deploy/docker/mysql 下的初始化 SQL 与配置挂入
+# kind 节点，使 mysql Pod 的 hostPath 挂载（/mnt/maxkey-mysql-*）能拿到文件。
+# extraPortMappings 把 nginx 的 NodePort(30080) 暴露到本机 80。
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraMounts:
+      - hostPath: ./deploy/docker/mysql/docker-entrypoint-initdb.d
+        containerPath: /mnt/maxkey-mysql-init
+        readOnly: true
+      - hostPath: ./deploy/docker/mysql/conf.d
+        containerPath: /mnt/maxkey-mysql-conf
+        readOnly: true
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 80
+        protocol: TCP

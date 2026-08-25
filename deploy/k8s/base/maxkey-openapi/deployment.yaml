@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: maxkey-openapi
+  namespace: maxkey
+  labels:
+    app: maxkey-openapi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: maxkey-openapi
+  template:
+    metadata:
+      labels:
+        app: maxkey-openapi
+    spec:
+      containers:
+        - name: maxkey-openapi
+          image: maxkey-openapi
+          env:
+            - name: TZ
+              value: Asia/Shanghai
+            - name: DATABASE_HOST
+              value: mysql
+            - name: DATABASE_PORT
+              value: "3306"
+            - name: DATABASE_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: maxkey-secrets
+                  key: DATABASE_NAME
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: maxkey-secrets
+                  key: DATABASE_USER
+            - name: DATABASE_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: maxkey-secrets
+                  key: DATABASE_PWD
+          ports:
+            - containerPort: 9525
+          readinessProbe:
+            tcpSocket:
+              port: 9525
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 9525
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 2Gi

@@ -1,0 +1,43 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: maxkey
+
+resources:
+  - namespace.yaml
+  - secrets.yaml
+  - mysql/mysql-pvc.yaml
+  - mysql/mysql-deployment.yaml
+  - mysql/mysql-service.yaml
+  - maxkey/deployment.yaml
+  - maxkey/service.yaml
+  - maxkey-mgt/deployment.yaml
+  - maxkey-mgt/service.yaml
+  - maxkey-openapi/deployment.yaml
+  - maxkey-openapi/service.yaml
+  - frontend/deployment.yaml
+  - frontend/service.yaml
+  - mgt-frontend/deployment.yaml
+  - mgt-frontend/service.yaml
+  - nginx/configmap.yaml
+  - nginx/deployment.yaml
+  - nginx/service.yaml
+
+# 镜像名在 Deployment 中以裸名（maxkey / maxkey-mgt ...）书写，
+# 由 kustomize 统一改写为 GHCR 地址。overlay 与 CI 可覆盖 newTag。
+images:
+  - name: maxkey
+    newName: ghcr.io/adminlinzi/maxkey
+    newTag: latest
+  - name: maxkey-mgt
+    newName: ghcr.io/adminlinzi/maxkey-mgt
+    newTag: latest
+  - name: maxkey-openapi
+    newName: ghcr.io/adminlinzi/maxkey-openapi
+    newTag: latest
+  - name: maxkey-frontend
+    newName: ghcr.io/adminlinzi/maxkey-frontend
+    newTag: latest
+  - name: maxkey-mgt-frontend
+    newName: ghcr.io/adminlinzi/maxkey-mgt-frontend
+    newTag: latest

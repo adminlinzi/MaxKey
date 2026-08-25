@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: maxkey-nginx
+  namespace: maxkey
+  labels:
+    app: maxkey-nginx
+spec:
+  selector:
+    app: maxkey-nginx
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      nodePort: 30080
+  type: NodePort

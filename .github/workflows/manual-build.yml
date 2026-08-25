@@ -1,0 +1,231 @@
+name: Manual Build
+
+# 手动触发（workflow_dispatch）：应对少量代码修改但未发布版本的情况。
+#   - 构建产物（后端 bootJar + 前端静态包）
+#   - 多架构（amd64 / arm64）构建并推送镜像到 GHCR
+#   - 镜像标签默认 dev-<分支名>-<短sha>（分支名中的 / 会替换为 -），同时打 sha-<commit>
+#   - 不创建 GitHub Release（区别于 release.yml）
+#   - 可选：本地 docker-compose 冒烟测试
+#
+# 在仓库 Actions 页选择 "Manual Build" -> "Run workflow"，可指定：
+#   image_tag   自定义镜像标签（留空则自动生成 dev-<分支>-<短sha>）
+#   push_images 是否推送镜像到 GHCR（默认 true）
+#   smoke_test  是否运行 docker-compose 本地冒烟（默认 true）
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "GHCR 镜像标签（留空自动生成 dev-<分支>-<短sha>）"
+        required: false
+        default: ""
+      push_images:
+        description: "是否推送镜像到 GHCR"
+        required: false
+        default: true
+        type: boolean
+      smoke_test:
+        description: "是否运行 docker-compose 本地冒烟测试"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute image tag
+        id: tag
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
+            TAG="${{ github.event.inputs.image_tag }}"
+          else
+            SAFE_BRANCH="${GITHUB_REF_NAME//\//-}"
+            TAG="dev-${SAFE_BRANCH}-${GITHUB_SHA::7}"
+          fi
+          echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "image tag = $TAG"
+
+      - name: Build artifacts (backend + frontend)
+        uses: ./.github/actions/build
+
+      - name: Upload backend jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jars
+          path: maxkey-webs/**/build/libs/*-boot-*-ga.jar
+          if-no-files-found: error
+
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: maxkey-web-frontend/*/dist
+          if-no-files-found: error
+
+  images:
+    needs: build
+    if: ${{ github.event.inputs.push_images == 'true' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: maxkey
+            context: maxkey-webs/maxkey-web-maxkey
+            dockerfile: maxkey-webs/maxkey-web-maxkey/Dockerfile
+          - name: maxkey-mgt
+            context: maxkey-webs/maxkey-web-mgt
+            dockerfile: maxkey-webs/maxkey-web-mgt/Dockerfile
+          - name: maxkey-openapi
+            context: maxkey-webs/maxkey-web-openapi
+            dockerfile: maxkey-webs/maxkey-web-openapi/Dockerfile
+          - name: maxkey-frontend
+            context: deploy/docker/frontend
+            dockerfile: deploy/docker/frontend/Dockerfile
+          - name: maxkey-mgt-frontend
+            context: deploy/docker/mgt-frontend
+            dockerfile: deploy/docker/mgt-frontend/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download backend jars
+        if: contains(matrix.name, 'maxkey') && matrix.name != 'maxkey-frontend' && matrix.name != 'maxkey-mgt-frontend'
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jars
+          path: .
+
+      - name: Download frontend dist
+        if: matrix.name == 'maxkey-frontend' || matrix.name == 'maxkey-mgt-frontend'
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: .
+
+      - name: Stage frontend dist
+        if: matrix.name == 'maxkey-frontend' || matrix.name == 'maxkey-mgt-frontend'
+        shell: bash
+        run: |
+          rm -rf deploy/docker/frontend/dist deploy/docker/mgt-frontend/dist
+          cp -r maxkey-web-frontend/maxkey-web-app/dist deploy/docker/frontend/dist
+          cp -r maxkey-web-frontend/maxkey-web-mgt-app/dist deploy/docker/mgt-frontend/dist
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:${{ needs.build.outputs.image_tag }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:sha-${{ github.sha }}
+
+  smoke-test:
+    needs: build
+    if: ${{ github.event.inputs.smoke_test == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download backend jars
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jars
+          path: .
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: .
+
+      - name: Stage frontend dist
+        shell: bash
+        run: |
+          rm -rf deploy/docker/frontend/dist deploy/docker/mgt-frontend/dist
+          cp -r maxkey-web-frontend/maxkey-web-app/dist deploy/docker/frontend/dist
+          cp -r maxkey-web-frontend/maxkey-web-mgt-app/dist deploy/docker/mgt-frontend/dist
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend images (local, amd64)
+        shell: bash
+        run: |
+          docker build -t maxkey:ci          -f maxkey-webs/maxkey-web-maxkey/Dockerfile   maxkey-webs/maxkey-web-maxkey
+          docker build -t maxkey-mgt:ci      -f maxkey-webs/maxkey-web-mgt/Dockerfile       maxkey-webs/maxkey-web-mgt
+          docker build -t maxkey-openapi:ci  -f maxkey-webs/maxkey-web-openapi/Dockerfile   maxkey-webs/maxkey-web-openapi
+
+      - name: Build frontend images (local, amd64)
+        shell: bash
+        run: |
+          docker build -t maxkey-frontend:ci       -f deploy/docker/frontend/Dockerfile      deploy/docker/frontend
+          docker build -t maxkey-mgt-frontend:ci   -f deploy/docker/mgt-frontend/Dockerfile  deploy/docker/mgt-frontend
+
+      - name: Compose smoke test
+        shell: bash
+        run: |
+          set -e
+          docker compose -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.local.yml up -d
+          wait_for() {
+            local url="$1" name="$2"
+            for i in $(seq 1 90); do
+              code=$(curl -s -o /dev/null -w '%{http_code}' "$url" || true)
+              if [ "$code" != "000" ]; then
+                echo "$name OK (http $code)"; return 0
+              fi
+              echo "$name not ready (conn refused), retry $i/90"
+              sleep 10
+            done
+            echo "::error::$name failed to become ready"
+            docker compose -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.local.yml logs --no-color
+            return 1
+          }
+          wait_for http://localhost:9527/sign/            maxkey
+          wait_for http://localhost:9526/maxkey-mgt-api/  maxkey-mgt
+          wait_for http://localhost:8527/                 maxkey-frontend
+          wait_for http://localhost:8526/                 maxkey-mgt-frontend
+          wait_for http://localhost/                       maxkey-nginx
+          echo "Compose smoke test passed"
+
+      - name: Tear down compose
+        if: always()
+        shell: bash
+        run: |
+          docker compose -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.local.yml down -v || true
+
+      - name: Validate k8s manifests (dry-run)
+        uses: azure/setup-kubectl@v4
+
+      - name: kubectl apply --dry-run
+        shell: bash
+        run: kubectl apply --dry-run=client -k deploy/k8s/overlays/dev

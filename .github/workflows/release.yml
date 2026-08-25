@@ -1,0 +1,218 @@
+name: Release
+
+# 推送语义化版本 tag（如 4.2.0，不带 v 前缀）触发完整发布流水线：
+#   1) 构建产物
+#   2) 多架构构建并推送镜像到 GHCR
+#   3) kind 临时集群实部署验证镜像可用
+#   4) 创建 GitHub Release 并上传制品（后端 jar / 前端静态包 / deploy 包）
+on:
+  push:
+    tags:
+      - "*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      is_release: ${{ steps.v.outputs.is_release }}
+    steps:
+      - id: v
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          V="${TAG#v}"
+          if [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "version=$V" >> "$GITHUB_OUTPUT"
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=" >> "$GITHUB_OUTPUT"
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.is_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build artifacts
+        uses: ./.github/actions/build
+      - name: Upload backend jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jars
+          path: maxkey-webs/**/build/libs/*-boot-*-ga.jar
+          if-no-files-found: error
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: maxkey-web-frontend/*/dist
+          if-no-files-found: error
+
+  images:
+    needs: [prepare, build]
+    if: needs.prepare.outputs.is_release == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: maxkey
+            context: maxkey-webs/maxkey-web-maxkey
+            dockerfile: maxkey-webs/maxkey-web-maxkey/Dockerfile
+          - name: maxkey-mgt
+            context: maxkey-webs/maxkey-web-mgt
+            dockerfile: maxkey-webs/maxkey-web-mgt/Dockerfile
+          - name: maxkey-openapi
+            context: maxkey-webs/maxkey-web-openapi
+            dockerfile: maxkey-webs/maxkey-web-openapi/Dockerfile
+          - name: maxkey-frontend
+            context: deploy/docker/frontend
+            dockerfile: deploy/docker/frontend/Dockerfile
+          - name: maxkey-mgt-frontend
+            context: deploy/docker/mgt-frontend
+            dockerfile: deploy/docker/mgt-frontend/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download backend jars
+        if: contains(matrix.name, 'maxkey') && matrix.name != 'maxkey-frontend' && matrix.name != 'maxkey-mgt-frontend'
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jars
+          path: .
+      - name: Download frontend dist
+        if: matrix.name == 'maxkey-frontend' || matrix.name == 'maxkey-mgt-frontend'
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: .
+      - name: Stage frontend dist
+        if: matrix.name == 'maxkey-frontend' || matrix.name == 'maxkey-mgt-frontend'
+        run: |
+          rm -rf deploy/docker/frontend/dist deploy/docker/mgt-frontend/dist
+          cp -r maxkey-web-frontend/maxkey-web-app/dist deploy/docker/frontend/dist
+          cp -r maxkey-web-frontend/maxkey-web-mgt-app/dist deploy/docker/mgt-frontend/dist
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push ${{ matrix.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:${{ needs.prepare.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:latest
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:sha-${{ github.sha }}
+
+  deploy-test:
+    needs: [prepare, images]
+    if: needs.prepare.outputs.is_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          config: deploy/k8s/kind/kind.yaml
+          wait: 180s
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+      - name: Install kustomize
+        uses: taiki-e/install-action@v2
+        with:
+          tool: kustomize
+      - name: Pin image tags in dev overlay
+        run: |
+          cd deploy/k8s/overlays/dev
+          for s in maxkey maxkey-mgt maxkey-openapi maxkey-frontend maxkey-mgt-frontend; do
+            kustomize edit set image "$s=ghcr.io/${{ github.repository_owner }}/$s:${{ needs.prepare.outputs.version }}"
+          done
+          kustomize build . > /tmp/manifests.yaml
+          kubectl apply -f /tmp/manifests.yaml
+      - name: Wait for rollout
+        run: |
+          for d in mysql maxkey maxkey-mgt maxkey-openapi maxkey-frontend maxkey-mgt-frontend maxkey-nginx; do
+            kubectl -n maxkey rollout status "deploy/$d" --timeout=420s
+          done
+      - name: Smoke test via nginx (NodePort 30080 -> host 80)
+        run: |
+          set -e
+          for i in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost/sign/ || true)
+            if [ "$code" = "200" ] || [ "$code" = "302" ]; then break; fi
+            echo "sign not ready ($code), retry $i/40"; sleep 10
+          done
+          curl -f http://localhost/sign/
+          curl -f http://localhost/maxkey/
+          curl -f http://localhost/maxkey-mgt/
+          echo "✅ Kind deploy-test passed"
+
+  release:
+    needs: [prepare, build, images, deploy-test]
+    if: needs.prepare.outputs.is_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download backend jars
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jars
+          path: .
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: .
+      - name: Package artifacts
+        run: |
+          cd "${{ github.workspace }}"
+          mkdir -p out
+          find maxkey-webs -name '*-boot-*-ga.jar' -print0 | xargs -0 zip -j out/maxkey-backend-jars.zip
+          (cd maxkey-web-frontend/maxkey-web-app/dist && zip -r "${{ github.workspace }}/out/maxkey-frontend-dist.zip" .)
+          (cd maxkey-web-frontend/maxkey-web-mgt-app/dist && zip -r "${{ github.workspace }}/out/maxkey-mgt-frontend-dist.zip" .)
+          (cd deploy && zip -r "${{ github.workspace }}/out/maxkey-deploy.zip" .)
+          ls -lh out
+      - name: Generate release notes
+        uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+      - name: Build release notes
+        run: git-cliff --config cliff.toml --tag ${{ needs.prepare.outputs.version }} --output release-notes.md
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.version }}
+          name: MaxKey ${{ needs.prepare.outputs.version }}
+          body_path: release-notes.md
+          files: |
+            out/maxkey-backend-jars.zip
+            out/maxkey-frontend-dist.zip
+            out/maxkey-mgt-frontend-dist.zip
+            out/maxkey-deploy.zip
+          fail_on_unmatched_files: false

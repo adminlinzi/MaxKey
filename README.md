@@ -128,7 +128,7 @@ App Management UI
 
 | Version    | Date   |  Download URL  |
 | --------   | :----- | :----           | 
-| v 4.1.12   | 2026/06/30   | <a href="https://www.maxkey.top/zh/about/download.html"  target="_blank">Download</a> |
+| v 4.2.0   | 2026/08/25   | <a href="https://www.maxkey.top/zh/about/download.html"  target="_blank">Download</a> |
 
 
 # Install
@@ -140,6 +140,22 @@ App Management UI
 | Docker   | <a href="https://www.maxkey.top/zh/about/download.html"  target="_blank">Document</a>  |
 | 宝塔 <a target="_blank" href="https://www.bt.cn/u/AjsXmi"> <img src="https://img.shields.io/badge/BT-Install-20a53a" /></a> | <a href="https://www.maxkey.top/zh/about/download.html"  target="_blank">Document</a>  |
 
+
+# CI/CD & Deployment
+
+MaxKey 提供开箱即用的 GitHub Actions 流水线，并配套独立的 `deploy/` 部署目录（与上游 `deployment/` 互不干扰）。
+
+| 工作流 | 触发 | 职责 |
+| --- | --- | --- |
+| `docs.yml` | PR / push `main` | 校验文档版本一致性；合并到 `main` 后用 git-cliff 回写 `CHANGELOG.md` |
+| `ci.yml` | PR / push `main` / **手动 `workflow_dispatch`** | 构建产物 → 本地构建镜像 → `docker-compose` 冒烟 → `kubectl apply --dry-run` 校验 k8s 清单 |
+| `release.yml` | 推送语义化 tag（如 `4.2.0`，不带 `v`） | 多架构构建并推送 GHCR → kind 实部署验证 → 创建 GitHub Release 并上传制品 |
+| `manual-build.yml` | **手动 `workflow_dispatch`** | 少量改动未发版时：构建产物 → 多架构推送 GHCR（标签 `dev-<分支>-<sha>`，不建 Release）→ 可选 `docker-compose` 冒烟 |
+
+- 容器镜像推送到 GitHub 容器仓库（GHCR）：`ghcr.io/<owner>/maxkey`、`maxkey-mgt`、`maxkey-openapi`、`maxkey-frontend`、`maxkey-mgt-frontend`。
+- CI 推送的标签：release 为 `语义版本`（如 `4.2.0`）、`latest`、`sha-<commit>`；manual-build 为 `dev-<分支>-<sha>`、`sha-<commit>`。
+- 详细部署步骤、kustomize 结构、kind 本地验证见 **[deploy/README.md](deploy/README.md)**。
+- 提交请遵循 Conventional Commits（`feat:` / `fix:` / `docs:` …），以便自动生成 CHANGELOG。
 
 # License
  

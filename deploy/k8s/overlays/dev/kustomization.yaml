@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: maxkey
+
+resources:
+  - ../../base
+
+# 开发/测试环境固定标签。发布流水线会用
+#   kustomize edit set image maxkey=ghcr.io/adminlinzi/maxkey:<版本>
+# 覆盖此处标签后再 kubectl apply。
+images:
+  - name: maxkey
+    newName: ghcr.io/adminlinzi/maxkey
+    newTag: "4.2.0"
+  - name: maxkey-mgt
+    newName: ghcr.io/adminlinzi/maxkey-mgt
+    newTag: "4.2.0"
+  - name: maxkey-openapi
+    newName: ghcr.io/adminlinzi/maxkey-openapi
+    newTag: "4.2.0"
+  - name: maxkey-frontend
+    newName: ghcr.io/adminlinzi/maxkey-frontend
+    newTag: "4.2.0"
+  - name: maxkey-mgt-frontend
+    newName: ghcr.io/adminlinzi/maxkey-mgt-frontend
+    newTag: "4.2.0"

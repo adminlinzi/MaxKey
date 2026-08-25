@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: maxkey-openapi
+  namespace: maxkey
+  labels:
+    app: maxkey-openapi
+spec:
+  selector:
+    app: maxkey-openapi
+  ports:
+    - name: http
+      port: 9525
+      targetPort: 9525
+  type: ClusterIP

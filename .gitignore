@@ -57,3 +57,7 @@ maxkey-web-frontend/maxkey-web-app/dist
 **/out/*
 /.sonarlint
 **/**/package-lock.json
+
+# CI 临时生成的部署前端构建产物（由 scripts/check-docs.sh 与构建流水线产出）
+deploy/docker/frontend/dist/
+deploy/docker/mgt-frontend/dist/

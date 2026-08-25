@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: maxkey-mgt
+  namespace: maxkey
+  labels:
+    app: maxkey-mgt
+spec:
+  selector:
+    app: maxkey-mgt
+  ports:
+    - name: http
+      port: 9526
+      targetPort: 9526
+  type: ClusterIP

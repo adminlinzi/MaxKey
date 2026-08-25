@@ -1,0 +1,42 @@
+# git-cliff 配置：基于 Conventional Commits 自动生成 CHANGELOG.md
+# 提交信息建议遵循： feat: / fix: / docs: / chore: / refactor: 等前缀
+[changelog]
+header = "# Changelog\n\nAll notable changes to MaxKey will be documented in this file.\n"
+body = """
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}
+- {{ commit.message | upper_first }}\
+{% endfor %}
+{% endfor %}
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^doc", group = "Documentation" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactor" },
+  { message = "^test", group = "Testing" },
+  { message = "^chore", group = "Miscellaneous Tasks" },
+  { message = "^ci", group = "CI" },
+  { message = "^revert", group = "Revert" },
+  { message = "^style", group = "Style" },
+  { message = "^build", group = "Build" },
+]
+protect_breaking_commits = false
+filter_commits = false
+tag_pattern = "[0-9]+\\.[0-9]+\\.[0-9]+*"
+topo_order = false
+sort_commits = "oldest"
+
+[remote.github]
+owner = "adminlinzi"
+repo = "MaxKey"

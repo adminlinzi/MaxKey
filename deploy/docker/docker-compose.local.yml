@@ -1,0 +1,16 @@
+# 本地冒烟覆盖文件（CI 使用）
+# 将镜像替换为 CI 本地构建的标签，避免依赖远程仓库。
+# 用法：
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+
+services:
+  maxkey:
+    image: maxkey:ci
+  maxkey-mgt:
+    image: maxkey-mgt:ci
+  maxkey-openapi:
+    image: maxkey-openapi:ci
+  maxkey-frontend:
+    image: maxkey-frontend:ci
+  maxkey-mgt-frontend:
+    image: maxkey-mgt-frontend:ci
