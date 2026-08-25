@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to MaxKey will be documented in this file.
-## [Unreleased]
+## [4.2.0] - 2026-08-25
 
 
 ### Bug Fixes
@@ -17,6 +17,7 @@ All notable changes to MaxKey will be documented in this file.
 - 修复机构配置修改后缓存没有清空，导致界面上看上去 修改失败了
 - Handle null version in git-cliff template for main branch changelog
 - Kubectl dry-run without K8s cluster; guard null timestamp in cliff template
+- Explicitly stage backend jars and frontend dist after artifact download
 
 ### Features
 
