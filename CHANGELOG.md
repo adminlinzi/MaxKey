@@ -6,16 +6,6 @@ All notable changes to MaxKey will be documented in this file.
 
 ### Bug Fixes
 
-- Install kustomize from GitHub release instead of cargo-binstall
-
-### Miscellaneous Tasks
-
-- Enforce LF line endings
-## [4.2.0] - 2026-08-25
-
-
-### Bug Fixes
-
 - 退出重定向回登录页面问题
 - 退出重定向回登录页面问题
 - Https://gitee.com/dromara/MaxKey/issues/I5X10K
@@ -28,6 +18,8 @@ All notable changes to MaxKey will be documented in this file.
 - Handle null version in git-cliff template for main branch changelog
 - Kubectl dry-run without K8s cluster; guard null timestamp in cliff template
 - Explicitly stage backend jars and frontend dist after artifact download
+- Install kustomize from GitHub release instead of cargo-binstall
+- Kind deploy-test mysql rollout timeout and backend startup
 
 ### Features
 
@@ -38,6 +30,7 @@ All notable changes to MaxKey will be documented in this file.
 ### Miscellaneous Tasks
 
 - Add SECURITY.md (private vulnerability reporting policy)
+- Enforce LF line endings
 
 ### Refactor
 
