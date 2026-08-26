@@ -19,6 +19,10 @@
 datadir=/var/lib/mysql
 socket=/var/lib/mysql/mysql.sock
 
+# MySQL 8.4 Docker 镜像编译的默认错误消息路径为 /usr/share/mysql-8.4/english，
+# 但实际文件位于 /usr/share/mysql/english，需显式校正。
+lc-messages-dir=/usr/share/mysql/english
+
 character-set-server=utf8mb4
 collation-server=utf8mb4_unicode_ci
 lower_case_table_names=1
@@ -39,3 +43,4 @@ default-character-set=utf8mb4
 
 [client]
 default-character-set=utf8mb4
+socket=/var/lib/mysql/mysql.sock

@@ -79,8 +79,15 @@ jobs:
           chmod +x kustomize
           sudo mv kustomize /usr/local/bin/
           kustomize version
-      - name: kubectl apply --dry-run
-        # CI 无 K8s 集群。kubectl apply -k 仍会触发 API discovery，因此改为：
-        # kustomize build 生成纯 YAML 后，再由 kubectl 做客户端 dry-run（--validate=false）。
+      - name: Kustomize build check
+        # CI 无 K8s 集群；kubectl apply --dry-run=client 仍会尝试 API discovery 并连接
+        # localhost:8080 而失败。这里仅做完全离线的 kustomize build，验证清单可生成。
         shell: bash
-        run: kustomize build deploy/k8s/overlays/dev | kubectl apply --dry-run=client --validate=false -f -
+        run: |
+          set -e
+          kustomize build deploy/k8s/overlays/dev > /tmp/manifests.yaml
+          test -s /tmp/manifests.yaml
+          for kind in Deployment Service PersistentVolumeClaim Secret ConfigMap; do
+            grep -q "kind: $kind" /tmp/manifests.yaml || { echo "missing $kind"; exit 1; }
+          done
+          echo "✅ K8s manifests build check passed"

@@ -24,20 +24,16 @@ resources:
   - nginx/service.yaml
 
 # 镜像名在 Deployment 中以裸名（maxkey / maxkey-mgt ...）书写，
-# 由 kustomize 统一改写为 GHCR 地址。overlay 与 CI 可覆盖 newTag。
+# 由 kustomize 统一改写为 GHCR 地址。base 只固定仓库地址，不固定 tag，
+# 避免 overlay/CI 设置 newTag 时被 base 的 latest 覆盖。
 images:
   - name: maxkey
     newName: ghcr.io/adminlinzi/maxkey
-    newTag: latest
   - name: maxkey-mgt
     newName: ghcr.io/adminlinzi/maxkey-mgt
-    newTag: latest
   - name: maxkey-openapi
     newName: ghcr.io/adminlinzi/maxkey-openapi
-    newTag: latest
   - name: maxkey-frontend
     newName: ghcr.io/adminlinzi/maxkey-frontend
-    newTag: latest
   - name: maxkey-mgt-frontend
     newName: ghcr.io/adminlinzi/maxkey-mgt-frontend
-    newTag: latest
