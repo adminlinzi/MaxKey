@@ -20,6 +20,9 @@ All notable changes to MaxKey will be documented in this file.
 - Explicitly stage backend jars and frontend dist after artifact download
 - Install kustomize from GitHub release instead of cargo-binstall
 - Kind deploy-test mysql rollout timeout and backend startup
+- K8s dry-run via kustomize build; refactor deploy README; strengthen mysql rollout
+- MySQL 8.4 auth plugin for kind deploy-test; enrich deploy README
+- Create maxkey namespace before GHCR pull secret in release deploy-test
 
 ### Features
 
