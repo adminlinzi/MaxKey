@@ -182,13 +182,15 @@ jobs:
           kustomize version
       # kind 默认只能拉取公共镜像；若 GHCR 包为私有（GitHub 默认），
       # 需创建 imagePullSecret 并绑定到 default serviceaccount，否则 maxkey 等镜像拉取失败。
-      - name: Create GHCR image pull secret for kind
+      - name: Create namespace and GHCR image pull secret for kind
         shell: bash
         run: |
+          kubectl create namespace maxkey --dry-run=client -o yaml | kubectl apply -f -
           kubectl -n maxkey create secret docker-registry ghcr-pull \
             --docker-server=ghcr.io \
             --docker-username="${{ github.actor }}" \
-            --docker-password="${{ secrets.GITHUB_TOKEN }}"
+            --docker-password="${{ secrets.GITHUB_TOKEN }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
           kubectl -n maxkey patch serviceaccount default -p '{"imagePullSecrets":[{"name":"ghcr-pull"}]}'
 
       - name: Pin image tags in dev overlay
