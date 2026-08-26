@@ -32,7 +32,9 @@ spec:
             - --character-set-server=utf8mb4
             - --collation-server=utf8mb4_unicode_ci
             - --explicit-defaults-for-timestamp=1
-            - --default-authentication-plugin=mysql_native_password
+            # MySQL 8.4 已删除 default-authentication-plugin 变量，
+            # 默认使用 caching_sha2_password；后端 JDBC URL 已带 allowPublicKeyRetrieval=true。
+            - --authentication-policy=*,caching_sha2_password
           ports:
             - containerPort: 3306
           volumeMounts:

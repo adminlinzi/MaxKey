@@ -26,7 +26,7 @@ lower_case_table_names=1
 symbolic-links=0
 
 log-error=/var/lib/mysql/error.log
-slow_query_log=on;
+slow_query_log=on
 slow-query-log-file=/var/lib/mysql/mysql-slow.log
 pid-file=/var/run/mysqld/mysqld.pid
 

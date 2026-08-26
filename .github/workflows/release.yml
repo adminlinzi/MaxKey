@@ -180,7 +180,19 @@ jobs:
           chmod +x kustomize
           sudo mv kustomize /usr/local/bin/
           kustomize version
+      # kind 默认只能拉取公共镜像；若 GHCR 包为私有（GitHub 默认），
+      # 需创建 imagePullSecret 并绑定到 default serviceaccount，否则 maxkey 等镜像拉取失败。
+      - name: Create GHCR image pull secret for kind
+        shell: bash
+        run: |
+          kubectl -n maxkey create secret docker-registry ghcr-pull \
+            --docker-server=ghcr.io \
+            --docker-username="${{ github.actor }}" \
+            --docker-password="${{ secrets.GITHUB_TOKEN }}"
+          kubectl -n maxkey patch serviceaccount default -p '{"imagePullSecrets":[{"name":"ghcr-pull"}]}'
+
       - name: Pin image tags in dev overlay
+        shell: bash
         run: |
           cd deploy/k8s/overlays/dev
           for s in maxkey maxkey-mgt maxkey-openapi maxkey-frontend maxkey-mgt-frontend; do
@@ -205,9 +217,13 @@ jobs:
             echo "=== Deployment $d ==="
             kubectl -n maxkey describe deploy "$d" || true
             echo "=== Logs for $d ==="
-            kubectl -n maxkey logs -l "app=$d" --tail=200 || true
-            kubectl -n maxkey logs -l "app=$d" --tail=200 --previous || true
+            kubectl -n maxkey logs -l "app=$d" --tail=300 || true
+            kubectl -n maxkey logs -l "app=$d" --tail=300 --previous || true
           done
+          echo "=== MySQL config dump ==="
+          kubectl -n maxkey exec deploy/mysql -i -- cat /etc/mysql/conf.d/mysqld.cnf 2>/dev/null || true
+          echo "=== MySQL init dir ==="
+          kubectl -n maxkey exec deploy/mysql -i -- ls -la /docker-entrypoint-initdb.d/ 2>/dev/null || true
       - name: Smoke test via nginx (NodePort 30080 -> host 80)
         run: |
           set -e
