@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to MaxKey will be documented in this file.
-## [Unreleased]
+## [4.2.0] - 2026-08-26
 
 
 ### Bug Fixes
@@ -23,6 +23,7 @@ All notable changes to MaxKey will be documented in this file.
 - K8s dry-run via kustomize build; refactor deploy README; strengthen mysql rollout
 - MySQL 8.4 auth plugin for kind deploy-test; enrich deploy README
 - Create maxkey namespace before GHCR pull secret in release deploy-test
+- Use default MySQL entrypoint in K8s and Compose; enlarge MySQL resources
 
 ### Features
 
