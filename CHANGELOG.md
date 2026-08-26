@@ -1,6 +1,12 @@
 # Changelog
 
 All notable changes to MaxKey will be documented in this file.
+## [Unreleased]
+
+
+### Bug Fixes
+
+- Stage artifacts before packaging and split release assets per component
 ## [4.2.0] - 2026-08-26
 
 
