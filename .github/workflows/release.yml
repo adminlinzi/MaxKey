@@ -251,20 +251,64 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: backend-jars
-          path: .
+          path: artifacts/backend
       - name: Download frontend dist
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
-          path: .
+          path: artifacts/frontend
       - name: Package artifacts
+        shell: bash
         run: |
+          set -e
           cd "${{ github.workspace }}"
           mkdir -p out
-          find maxkey-webs -name '*-boot-*-ga.jar' -print0 | xargs -0 zip -j out/maxkey-backend-jars.zip
-          (cd maxkey-web-frontend/maxkey-web-app/dist && zip -r "${{ github.workspace }}/out/maxkey-frontend-dist.zip" .)
-          (cd maxkey-web-frontend/maxkey-web-mgt-app/dist && zip -r "${{ github.workspace }}/out/maxkey-mgt-frontend-dist.zip" .)
+
+          # 后端 bootJar：下载路径可能保留原目录结构或被 flatten，统一在 artifacts/backend 下查找
+          backend_dir="artifacts/backend"
+          jars=$(find "$backend_dir" -type f -name '*-boot-*-ga.jar' | sort)
+          if [ -z "$jars" ]; then
+            echo "::error::No backend boot jars found in $backend_dir"
+            find "$backend_dir" -type f -o -type d | head -50
+            exit 1
+          fi
+          echo "Backend jars found:"
+          echo "$jars"
+
+          # 各后端组件单独打包成独立 Release asset
+          pack_jar() {
+            local prefix="$1"
+            local asset="$2"
+            local jar_file=$(find "$backend_dir" -type f -name "${prefix}-*-ga.jar" | head -n 1)
+            if [ -z "$jar_file" ]; then
+              echo "::error::Could not find ${prefix}-*-ga.jar"
+              find "$backend_dir" -type f | head -20
+              exit 1
+            fi
+            echo "Packaging $jar_file -> out/$asset"
+            zip -j "out/$asset" "$jar_file"
+          }
+          pack_jar "maxkey-boot"        "maxkey-web-maxkey.zip"
+          pack_jar "maxkey-mgt-boot"    "maxkey-web-mgt.zip"
+          pack_jar "maxkey-openapi-boot" "maxkey-web-openapi.zip"
+
+          # 前端静态包：同样通过查找定位，避免依赖固定相对路径
+          app_dist=$(find artifacts/frontend -type d -path '*/maxkey-web-app/dist' | head -n 1)
+          mgt_dist=$(find artifacts/frontend -type d -path '*/maxkey-web-mgt-app/dist' | head -n 1)
+          if [ -z "$app_dist" ] || [ -z "$mgt_dist" ]; then
+            echo "::error::Frontend dist directories not found in artifacts/frontend"
+            find artifacts/frontend -type d | head -50
+            exit 1
+          fi
+          echo "Frontend dist: $app_dist"
+          echo "Mgt frontend dist: $mgt_dist"
+          (cd "$app_dist" && zip -r "${{ github.workspace }}/out/maxkey-frontend.zip" .)
+          (cd "$mgt_dist" && zip -r "${{ github.workspace }}/out/maxkey-mgt-frontend.zip" .)
+
+          # 部署文件打包
           (cd deploy && zip -r "${{ github.workspace }}/out/maxkey-deploy.zip" .)
+
+          echo "=== Release assets ==="
           ls -lh out
       - name: Generate release notes
         uses: taiki-e/install-action@v2
@@ -279,8 +323,10 @@ jobs:
           name: MaxKey ${{ needs.prepare.outputs.version }}
           body_path: release-notes.md
           files: |
-            out/maxkey-backend-jars.zip
-            out/maxkey-frontend-dist.zip
-            out/maxkey-mgt-frontend-dist.zip
+            out/maxkey-web-maxkey.zip
+            out/maxkey-web-mgt.zip
+            out/maxkey-web-openapi.zip
+            out/maxkey-frontend.zip
+            out/maxkey-mgt-frontend.zip
             out/maxkey-deploy.zip
           fail_on_unmatched_files: false
