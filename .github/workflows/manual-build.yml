@@ -3,20 +3,20 @@ name: Manual Build
 # 手动触发（workflow_dispatch）：应对少量代码修改但未发布版本的情况。
 #   - 构建产物（后端 bootJar + 前端静态包）
 #   - 多架构（amd64 / arm64）构建并推送镜像到 GHCR
-#   - 镜像标签默认 dev-<分支名>-<短sha>（分支名中的 / 会替换为 -），同时打 sha-<commit>
+#   - 镜像标签必须是明确的版本号（由运行人指定，例如 4.1.12-dev1）；禁止 latest 与 sha-* 标签
 #   - 不创建 GitHub Release（区别于 release.yml）
 #   - 可选：本地 docker-compose 冒烟测试
 #
-# 在仓库 Actions 页选择 "Manual Build" -> "Run workflow"，可指定：
-#   image_tag   自定义镜像标签（留空则自动生成 dev-<分支>-<短sha>）
+# 在仓库 Actions 页选择 "Manual Build" -> "Run workflow"，需指定：
+#   image_tag   明确的镜像标签（必填，例如 4.1.12-dev1；禁止 latest / sha-）
 #   push_images 是否推送镜像到 GHCR（默认 true）
 #   smoke_test  是否运行 docker-compose 本地冒烟（默认 true）
 on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "GHCR 镜像标签（留空自动生成 dev-<分支>-<短sha>）"
-        required: false
+        description: "GHCR 镜像标签（必填，必须是明确版本号，例如 4.1.12-dev1；禁止使用 latest 或 sha- 开头）"
+        required: true
         default: ""
       push_images:
         description: "是否推送镜像到 GHCR"
@@ -48,11 +48,14 @@ jobs:
         id: tag
         shell: bash
         run: |
-          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
-            TAG="${{ github.event.inputs.image_tag }}"
-          else
-            SAFE_BRANCH="${GITHUB_REF_NAME//\//-}"
-            TAG="dev-${SAFE_BRANCH}-${GITHUB_SHA::7}"
+          TAG="${{ github.event.inputs.image_tag }}"
+          if [ -z "$TAG" ]; then
+            echo "::error::image_tag 必填，且必须是明确的版本号（禁止使用 latest 或 sha- 开头）"
+            exit 1
+          fi
+          if [ "$TAG" = "latest" ] || [[ "$TAG" == sha-* ]]; then
+            echo "::error::禁止使用 latest 或 sha- 开头的标签：收到 '$TAG'"
+            exit 1
           fi
           echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "image tag = $TAG"
@@ -163,9 +166,9 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
+          # 仅推送运行人指定的明确版本标签；禁止 latest 与 sha-* 标签。
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:${{ needs.build.outputs.image_tag }}
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:sha-${{ github.sha }}
 
   smoke-test:
     needs: build
