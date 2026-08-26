@@ -110,6 +110,8 @@ MySQL 版本为 **8.4.2**，已适配：
 - 使用 `caching_sha2_password` 作为默认认证插件。
 - 后端 JDBC URL 已包含 `allowPublicKeyRetrieval=true`，确保本地/测试环境可连接。
 - 不再使用 MySQL 8.4 已删除的 `default-authentication-plugin` 变量。
+- **K8s 中不覆盖 `command`**：保留官方镜像的 `docker-entrypoint.sh` entrypoint，确保数据目录初始化与 SQL 导入正常执行；运行参数通过 `conf.d/mysqld.cnf` 注入。
+- **资源配置**：K8s 中 MySQL requests 2Gi/1CPU、limits 4Gi/2CPU；若初始化 11MB SQL 仍 OOM，可继续上调 `limits.memory`。
 
 > **K8s 注意**：`base/mysql/mysql-deployment.yaml` 使用 `hostPath` 挂载初始化 SQL，**仅适用于 kind/单机测试**。生产环境请改用托管数据库，或通过 db-init Job 加载初始化 SQL。
 
@@ -284,10 +286,11 @@ release:
 
 常见原因：
 
-1. **MySQL 配置不兼容**：检查是否使用了 MySQL 8.4 已删除的变量（如 `default-authentication-plugin`）。
-2. **初始化 SQL 执行慢**：`maxkey.sql` 约 11MB，首次启动需要 1-3 分钟；`startupProbe` 已留出足够时间。
-3. **hostPath 挂载失败**：确认 kind 节点上 `/mnt/maxkey-mysql-init` 存在且包含 `init.sql` 与 `latest/maxkey.sql`。
-4. **资源不足**：kind 单节点默认资源有限，已给 MySQL 分配 2Gi 内存/2 CPU。
+1. **K8s 中覆盖了 MySQL `command`**：MySQL 官方镜像依赖 `docker-entrypoint.sh` 初始化数据目录并执行 `/docker-entrypoint-initdb.d/` 下的 SQL。K8s 中若用 `command: [mysqld, ...]` 会覆盖 entrypoint，导致以 root 启动 mysqld 直接崩溃。当前配置已改用默认 entrypoint + `conf.d/mysqld.cnf` 传参。
+2. **MySQL 配置不兼容**：检查是否使用了 MySQL 8.4 已删除的变量（如 `default-authentication-plugin`）。
+3. **初始化 SQL 执行慢**：`maxkey.sql` 约 11MB，首次启动需要 1-3 分钟；`startupProbe` 已留出足够时间。
+4. **hostPath 挂载失败**：确认 kind 节点上 `/mnt/maxkey-mysql-init` 存在且包含 `init.sql` 与 `latest/maxkey.sql`。
+5. **资源不足**：kind 单节点默认资源有限，当前已给 MySQL 分配 requests 2Gi/1CPU、limits 4Gi/2CPU。若日志出现 `OOMKilled`，继续上调 `limits.memory`。
 
 排查命令：
 

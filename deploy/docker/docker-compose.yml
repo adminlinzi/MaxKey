@@ -29,11 +29,9 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: maxkey
       TZ: Asia/Shanghai
-    command: >
-      --character-set-server=utf8mb4
-      --collation-server=utf8mb4_unicode_ci
-      --explicit-defaults-for-timestamp=1
-      --authentication-policy=*,caching_sha2_password
+    # 不覆盖 command，保留 MySQL 官方镜像的 docker-entrypoint.sh entrypoint，
+    # 使其能够初始化数据目录并执行 /docker-entrypoint-initdb.d 下的 SQL。
+    # 运行参数统一通过 ./mysql/conf.d/mysqld.cnf 注入。
     volumes:
       - ./mysql/conf.d:/etc/mysql/conf.d:ro
       - ./mysql/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
@@ -44,8 +42,8 @@ services:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p$$MYSQL_ROOT_PASSWORD"]
       interval: 10s
       timeout: 5s
-      retries: 20
-      start_period: 60s
+      retries: 60
+      start_period: 120s
     networks:
       - maxkey
     restart: unless-stopped
