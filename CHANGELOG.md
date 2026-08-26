@@ -24,6 +24,7 @@ All notable changes to MaxKey will be documented in this file.
 - MySQL 8.4 auth plugin for kind deploy-test; enrich deploy README
 - Create maxkey namespace before GHCR pull secret in release deploy-test
 - Use default MySQL entrypoint in K8s and Compose; enlarge MySQL resources
+- Offline kustomize check, MySQL client socket, lc-messages-dir, kustomize image tag override
 
 ### Features
 
