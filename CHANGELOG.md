@@ -6,7 +6,7 @@ All notable changes to MaxKey will be documented in this file.
 
 ### Bug Fixes
 
-- Move images transformer from base to overlay so version tag override works
+- Deploy-test pins to version tag, accepts both latest and version, blocks only sha-
 ## [4.1.12] - 2026-08-27
 
 
@@ -33,6 +33,7 @@ All notable changes to MaxKey will be documented in this file.
 - Offline kustomize check, MySQL client socket, lc-messages-dir, kustomize image tag override
 - Stage artifacts before packaging and split release assets per component
 - Pin deploy-test to explicit version with verification; drop unknown/unknown via provenance off; add edge alias
+- Move images transformer from base to overlay so version tag override works
 
 ### Features
 
