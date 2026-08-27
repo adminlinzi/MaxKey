@@ -145,11 +145,12 @@ jobs:
           # 关闭 SLSA provenance / SBOM 证明清单，避免 GHCR 把证明 manifest 渲染成 unknown/unknown。
           provenance: false
           sbom: false
-          # 仅推送明确版本号标签；禁止 latest 与 sha-* 标签。
-          # edge 为“最新构建”别名（非 latest/sha-），供 dev overlay 默认引用与本地 kubectl apply 使用。
+          # 推送“明确版本号”标签 + latest 别名。
+          # latest 为“最新构建”别名，真实推送到 GHCR，供 dev overlay 默认引用与本地 kubectl apply 使用；
+          # 但 deploy-test 会将其覆盖为具体版本号（见下方 Pin 步骤），不会用 latest 线上部署。
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:${{ needs.prepare.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:edge
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:latest
 
   deploy-test:
     needs: [prepare, images]
@@ -200,18 +201,22 @@ jobs:
       - name: Pin image tags in dev overlay
         shell: bash
         run: |
+          set -euo pipefail
           cd deploy/k8s/overlays/dev
           VERSION="${{ needs.prepare.outputs.version }}"
           OWNER="${{ github.repository_owner }}"
+          echo "Pinning images to version: ${VERSION} (owner: ${OWNER})"
           for s in maxkey maxkey-mgt maxkey-openapi maxkey-frontend maxkey-mgt-frontend; do
             kustomize edit set image "$s=ghcr.io/${OWNER}/$s:${VERSION}"
           done
+          echo "=== overlay kustomization.yaml after pinning ==="
+          cat kustomization.yaml
           kustomize build . > /tmp/manifests.yaml
           echo "=== 部署清单中的镜像标签 ==="
           grep -E 'image: ghcr.io' /tmp/manifests.yaml
-          # 硬性校验：部署清单不得出现 edge / latest / sha-，且必须包含本次提交 tag 的版本号
-          if grep -Eq 'image:.*:(edge|latest|sha-[0-9a-f]+)$' /tmp/manifests.yaml; then
-            echo "::error::部署清单仍含禁止标签（edge/latest/sha-），终止部署以避免拉取错误镜像"
+          # 硬性校验：部署清单不得出现 latest / sha-，且必须包含本次提交 tag 的版本号
+          if grep -Eq 'image:.*:(latest|sha-[0-9a-f]+)$' /tmp/manifests.yaml; then
+            echo "::error::部署清单仍含禁止标签（latest/sha-），终止部署以避免拉取错误镜像"
             grep -E 'image:' /tmp/manifests.yaml
             exit 1
           fi

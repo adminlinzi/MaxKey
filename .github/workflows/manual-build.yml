@@ -169,11 +169,11 @@ jobs:
           # 关闭 SLSA provenance / SBOM 证明清单，避免 GHCR 把证明 manifest 渲染成 unknown/unknown。
           provenance: false
           sbom: false
-          # 仅推送运行人指定的明确版本标签；禁止 latest 与 sha-* 标签。
-          # edge 为“最新构建”别名（非 latest/sha-），供 dev overlay 默认引用与本地 kubectl apply 使用。
+          # 推送“明确版本标签” + latest 别名。
+          # latest 为“最新构建”别名，真实推送到 GHCR，供 dev overlay 默认引用与本地 kubectl apply 使用。
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:${{ needs.build.outputs.image_tag }}
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:edge
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:latest
 
   smoke-test:
     needs: build
