@@ -6,8 +6,8 @@ All notable changes to MaxKey will be documented in this file.
 
 ### Bug Fixes
 
-- Stage artifacts before packaging and split release assets per component
-## [4.2.0] - 2026-08-26
+- Pin deploy-test to explicit version with verification; drop unknown/unknown via provenance off; add edge alias
+## [4.1.12] - 2026-08-26
 
 
 ### Bug Fixes
@@ -31,6 +31,7 @@ All notable changes to MaxKey will be documented in this file.
 - Create maxkey namespace before GHCR pull secret in release deploy-test
 - Use default MySQL entrypoint in K8s and Compose; enlarge MySQL resources
 - Offline kustomize check, MySQL client socket, lc-messages-dir, kustomize image tag override
+- Stage artifacts before packaging and split release assets per component
 
 ### Features
 
@@ -46,6 +47,8 @@ All notable changes to MaxKey will be documented in this file.
 ### Refactor
 
 - 将passkey实体类迁移到正确的包路径下
+- Drop latest/sha image tags; require explicit version for manual builds
+- Drop latest/sha image tags; require explicit version for manual builds
 
 ### Signed-off-by
 
