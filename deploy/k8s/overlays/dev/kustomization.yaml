@@ -6,22 +6,24 @@ namespace: maxkey
 resources:
   - ../../base
 
-# 开发/测试环境默认使用 edge 标签（明确的固定版本，非 latest）；发布流水线会用
+# overlay 负责把 Deployment 中的裸镜像名（maxkey / maxkey-mgt ...）改写为 GHCR 地址。
+# 开发/测试环境默认使用 latest 标签（即“最新构建”别名，CI 会真实推送该标签，确保默认引用时标签真实存在）。
+# 发布流水线会用
 #   kustomize edit set image maxkey=ghcr.io/adminlinzi/maxkey:<版本>
-# 覆盖此处标签后再 kubectl apply。禁止在任意位置使用 latest 或 sha- 标签。
+# 覆盖此处标签后再 kubectl apply。deploy-test 阶段会强制覆盖为具体提交 tag，不会用 latest 线上部署。
 images:
   - name: maxkey
     newName: ghcr.io/adminlinzi/maxkey
-    newTag: edge
+    newTag: latest
   - name: maxkey-mgt
     newName: ghcr.io/adminlinzi/maxkey-mgt
-    newTag: edge
+    newTag: latest
   - name: maxkey-openapi
     newName: ghcr.io/adminlinzi/maxkey-openapi
-    newTag: edge
+    newTag: latest
   - name: maxkey-frontend
     newName: ghcr.io/adminlinzi/maxkey-frontend
-    newTag: edge
+    newTag: latest
   - name: maxkey-mgt-frontend
     newName: ghcr.io/adminlinzi/maxkey-mgt-frontend
-    newTag: edge
+    newTag: latest
