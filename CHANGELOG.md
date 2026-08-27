@@ -4,9 +4,9 @@ All notable changes to MaxKey will be documented in this file.
 ## [Unreleased]
 
 
-### Refactor
+### Bug Fixes
 
-- Use latest alias (real pushed tag) for deploy fallback; keep explicit version in deploy-test
+- Move images transformer from base to overlay so version tag override works
 ## [4.1.12] - 2026-08-27
 
 
@@ -50,6 +50,7 @@ All notable changes to MaxKey will be documented in this file.
 - 将passkey实体类迁移到正确的包路径下
 - Drop latest/sha image tags; require explicit version for manual builds
 - Drop latest/sha image tags; require explicit version for manual builds
+- Use latest alias (real pushed tag) for deploy fallback; keep explicit version in deploy-test
 
 ### Signed-off-by
 
