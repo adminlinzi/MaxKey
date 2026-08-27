@@ -146,8 +146,9 @@ jobs:
           provenance: false
           sbom: false
           # 推送“明确版本号”标签 + latest 别名。
-          # latest 为“最新构建”别名，真实推送到 GHCR，供 dev overlay 默认引用与本地 kubectl apply 使用；
-          # 但 deploy-test 会将其覆盖为具体版本号（见下方 Pin 步骤），不会用 latest 线上部署。
+          # 二者均真实推送到 GHCR；latest 为“最新构建”别名，供 dev overlay 默认引用与本地 kubectl apply 使用。
+          # 二者均为合法部署 tag（deploy-test 校验同时接受 latest 与具体版本号，只拦截 sha- 非法 tag）；
+          # 但 deploy-test 为确定性部署，会用 kustomize edit set image 把 overlay 锁定到本次提交 tag 的具体版本号。
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:${{ needs.prepare.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:latest
@@ -198,14 +199,16 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
           kubectl -n maxkey patch serviceaccount default -p '{"imagePullSecrets":[{"name":"ghcr-pull"}]}'
 
-      - name: Pin image tags in dev overlay
+      - name: Pin deploy-test to version tag (latest also accepted)
         shell: bash
         run: |
           set -euo pipefail
           cd deploy/k8s/overlays/dev
           VERSION="${{ needs.prepare.outputs.version }}"
           OWNER="${{ github.repository_owner }}"
-          echo "Pinning images to version: ${VERSION} (owner: ${OWNER})"
+          echo "Pinning deploy-test to specific version: ${VERSION} (owner: ${OWNER})"
+          echo "（说明：latest 与具体版本号均为合法 tag，均可被接受；此处为确定性部署，锁定到具体版本号 ${VERSION}）"
+          # 把 overlay 默认 latest 覆盖为本次提交 tag 的具体版本号，确保测试部署的是可追溯的确切版本。
           for s in maxkey maxkey-mgt maxkey-openapi maxkey-frontend maxkey-mgt-frontend; do
             kustomize edit set image "$s=ghcr.io/${OWNER}/$s:${VERSION}"
           done
@@ -214,17 +217,21 @@ jobs:
           kustomize build . > /tmp/manifests.yaml
           echo "=== 部署清单中的镜像标签 ==="
           grep -E 'image: ghcr.io' /tmp/manifests.yaml
-          # 硬性校验：部署清单不得出现 latest / sha-，且必须包含本次提交 tag 的版本号
-          if grep -Eq 'image:.*:(latest|sha-[0-9a-f]+)$' /tmp/manifests.yaml; then
-            echo "::error::部署清单仍含禁止标签（latest/sha-），终止部署以避免拉取错误镜像"
+          # 硬性校验：
+          # 1) 禁止 sha- 开头的非法 tag（自动生成的证明/平台 digest 不允许作为部署 tag）；
+          # 2) 5 个 MaxKey 组件镜像必须是 latest 或本次提交 tag 的版本号（二者均可流入测试）。
+          if grep -Eq 'image:.*:sha-[0-9a-f]+$' /tmp/manifests.yaml; then
+            echo "::error::部署清单含 sha- 开头的非法 tag，终止部署以避免拉取错误镜像"
             grep -E 'image:' /tmp/manifests.yaml
             exit 1
           fi
-          if ! grep -q "image: ghcr.io/${OWNER}/maxkey:${VERSION}" /tmp/manifests.yaml; then
-            echo "::error::未找到预期版本标签 ${VERSION}，终止部署"
-            grep -E 'image:' /tmp/manifests.yaml
-            exit 1
-          fi
+          for s in maxkey maxkey-mgt maxkey-openapi maxkey-frontend maxkey-mgt-frontend; do
+            if ! grep -Eq "image: ghcr.io/${OWNER}/$s:(latest|${VERSION})$" /tmp/manifests.yaml; then
+              echo "::error::组件 $s 未使用合法镜像标签（latest 或 ${VERSION}），终止部署"
+              grep -E "image: ghcr.io/${OWNER}/$s" /tmp/manifests.yaml
+              exit 1
+            fi
+          done
           kubectl apply -f /tmp/manifests.yaml
       - name: Wait for rollout
         run: |

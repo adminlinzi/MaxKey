@@ -8,9 +8,8 @@ resources:
 
 # overlay 负责把 Deployment 中的裸镜像名（maxkey / maxkey-mgt ...）改写为 GHCR 地址。
 # 开发/测试环境默认使用 latest 标签（即“最新构建”别名，CI 会真实推送该标签，确保默认引用时标签真实存在）。
-# 发布流水线会用
-#   kustomize edit set image maxkey=ghcr.io/adminlinzi/maxkey:<版本>
-# 覆盖此处标签后再 kubectl apply。deploy-test 阶段会强制覆盖为具体提交 tag，不会用 latest 线上部署。
+# latest 与具体版本号均为合法部署 tag；deploy-test 阶段二者都通过校验（只拦截 sha- 非法 tag），
+# 但为确定性部署，deploy-test 会用 kustomize edit set image 把此处覆盖为本次提交 tag 的具体版本号。
 images:
   - name: maxkey
     newName: ghcr.io/adminlinzi/maxkey
