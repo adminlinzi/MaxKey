@@ -142,9 +142,14 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
+          # 关闭 SLSA provenance / SBOM 证明清单，避免 GHCR 把证明 manifest 渲染成 unknown/unknown。
+          provenance: false
+          sbom: false
           # 仅推送明确版本号标签；禁止 latest 与 sha-* 标签。
+          # edge 为“最新构建”别名（非 latest/sha-），供 dev overlay 默认引用与本地 kubectl apply 使用。
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:${{ needs.prepare.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:edge
 
   deploy-test:
     needs: [prepare, images]
@@ -196,10 +201,25 @@ jobs:
         shell: bash
         run: |
           cd deploy/k8s/overlays/dev
+          VERSION="${{ needs.prepare.outputs.version }}"
+          OWNER="${{ github.repository_owner }}"
           for s in maxkey maxkey-mgt maxkey-openapi maxkey-frontend maxkey-mgt-frontend; do
-            kustomize edit set image "$s=ghcr.io/${{ github.repository_owner }}/$s:${{ needs.prepare.outputs.version }}"
+            kustomize edit set image "$s=ghcr.io/${OWNER}/$s:${VERSION}"
           done
           kustomize build . > /tmp/manifests.yaml
+          echo "=== 部署清单中的镜像标签 ==="
+          grep -E 'image: ghcr.io' /tmp/manifests.yaml
+          # 硬性校验：部署清单不得出现 edge / latest / sha-，且必须包含本次提交 tag 的版本号
+          if grep -Eq 'image:.*:(edge|latest|sha-[0-9a-f]+)$' /tmp/manifests.yaml; then
+            echo "::error::部署清单仍含禁止标签（edge/latest/sha-），终止部署以避免拉取错误镜像"
+            grep -E 'image:' /tmp/manifests.yaml
+            exit 1
+          fi
+          if ! grep -q "image: ghcr.io/${OWNER}/maxkey:${VERSION}" /tmp/manifests.yaml; then
+            echo "::error::未找到预期版本标签 ${VERSION}，终止部署"
+            grep -E 'image:' /tmp/manifests.yaml
+            exit 1
+          fi
           kubectl apply -f /tmp/manifests.yaml
       - name: Wait for rollout
         run: |
