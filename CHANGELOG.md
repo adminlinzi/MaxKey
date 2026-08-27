@@ -4,10 +4,10 @@ All notable changes to MaxKey will be documented in this file.
 ## [Unreleased]
 
 
-### Bug Fixes
+### Refactor
 
-- Pin deploy-test to explicit version with verification; drop unknown/unknown via provenance off; add edge alias
-## [4.1.12] - 2026-08-26
+- Use latest alias (real pushed tag) for deploy fallback; keep explicit version in deploy-test
+## [4.1.12] - 2026-08-27
 
 
 ### Bug Fixes
@@ -32,6 +32,7 @@ All notable changes to MaxKey will be documented in this file.
 - Use default MySQL entrypoint in K8s and Compose; enlarge MySQL resources
 - Offline kustomize check, MySQL client socket, lc-messages-dir, kustomize image tag override
 - Stage artifacts before packaging and split release assets per component
+- Pin deploy-test to explicit version with verification; drop unknown/unknown via provenance off; add edge alias
 
 ### Features
 
