@@ -22,6 +22,6 @@ export const environment = {
   api: {
     baseUrl: '/maxkey-mgt-api',
     refreshTokenEnabled: true,
-    refreshTokenType: 're-request'
+    refreshTokenType: 'auth-refresh'
   }
 } as Environment;

@@ -22,6 +22,6 @@ export const environment = {
   api: {
     baseUrl: '/sign/',
     refreshTokenEnabled: true,
-    refreshTokenType: 're-request'
+    refreshTokenType: 'auth-refresh'
   }
 } as Environment;

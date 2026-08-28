@@ -30,7 +30,7 @@ export const environment = {
     //baseUrl: 'http://sso.maxkey.top/sign/',
     baseUrl: 'http://localhost:9527/sign/',
     refreshTokenEnabled: true,
-    refreshTokenType: 're-request'
+    refreshTokenType: 'auth-refresh'
   },
   modules: [DelonMockModule.forRoot({ data: MOCKDATA })]
 } as Environment;

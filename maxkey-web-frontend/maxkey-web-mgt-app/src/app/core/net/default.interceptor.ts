@@ -29,7 +29,6 @@ import { DA_SERVICE_TOKEN, ITokenService } from '@delon/auth';
 import { ALAIN_I18N_TOKEN, _HttpClient } from '@delon/theme';
 import { environment } from '@env/environment';
 import { NzNotificationService } from 'ng-zorro-antd/notification';
-import { CookieService } from 'ngx-cookie-service';
 import { BehaviorSubject, Observable, of, throwError } from 'rxjs';
 import { catchError, filter, mergeMap, switchMap, take } from 'rxjs/operators';
 
@@ -74,10 +73,6 @@ export class DefaultInterceptor implements HttpInterceptor {
     return this.injector.get(NzNotificationService);
   }
 
-  private get cookieService(): CookieService {
-    return this.injector.get(CookieService);
-  }
-
   private get tokenSrv(): ITokenService {
     return this.injector.get(DA_SERVICE_TOKEN);
   }
@@ -107,7 +102,8 @@ export class DefaultInterceptor implements HttpInterceptor {
    */
   private refreshTokenRequest(): Observable<any> {
     const model = this.tokenSrv.get();
-    return this.http.post(`/auth/token/refresh`, null, { refresh_token: model?.['refresh_token'] || '' });
+    //return this.http.post(`/auth/token/refresh`, null, { refresh_token: model?.['refresh_token'] || '' });
+    return this.http.get(`/auth/token/refresh`, { refresh_token: model?.['refresh_token'] || '' });
   }
 
   // #region 刷新Token方式一：使用 401 重新刷新 Token
@@ -134,13 +130,13 @@ export class DefaultInterceptor implements HttpInterceptor {
 
     return this.refreshTokenRequest().pipe(
       switchMap(res => {
-        console.log(res.data);
         // 通知后续请求继续执行
         this.refreshToking = false;
-        this.refreshToken$.next(res.data.refresh_token);
-        this.cookieService.set(CONSTS.CONGRESS, res.data.token);
+        const jwtToken = res.data;
+        console.log(res.data);
+        this.refreshToken$.next(jwtToken);
         // 重新保存新 token
-        this.tokenSrv.set(res.data);
+        this.tokenSrv.set(jwtToken);
         // 重新发起请求
         return next.handle(this.reAttachToken(req));
       }),
@@ -190,9 +186,11 @@ export class DefaultInterceptor implements HttpInterceptor {
       .subscribe(
         res => {
           // TODO: Mock expired value
-          res.expired = +new Date() + 1000 * 60 * 5;
+          //res.expired = +new Date() + 1000 * 60 * 5;
           this.refreshToking = false;
-          this.tokenSrv.set(res);
+          let jwtToken = res.data;
+          jwtToken.expired = jwtToken.expired * 1000;
+          this.tokenSrv.set(jwtToken);
         },
         () => this.toLogin()
       );
