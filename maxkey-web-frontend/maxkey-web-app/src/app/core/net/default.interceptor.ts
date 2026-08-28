@@ -107,7 +107,8 @@ export class DefaultInterceptor implements HttpInterceptor {
    */
   private refreshTokenRequest(): Observable<any> {
     const model = this.tokenSrv.get();
-    return this.http.post(`/auth/token/refresh`, null, { refresh_token: model?.['refresh_token'] || '' });
+    ////return this.http.post(`/auth/token/refresh`, null, { refresh_token: model?.['refresh_token'] || '' });
+    return this.http.get(`/auth/token/refresh`, { refresh_token: model?.['refresh_token'] || '' });
   }
 
   // #region 刷新Token方式一：使用 401 重新刷新 Token
@@ -137,10 +138,11 @@ export class DefaultInterceptor implements HttpInterceptor {
         console.log(res.data);
         // 通知后续请求继续执行
         this.refreshToking = false;
-        this.refreshToken$.next(res.data.refresh_token);
-        this.cookieService.set(CONSTS.CONGRESS, res.data.token);
+        const jwtToken = res.data;
+        this.refreshToken$.next(jwtToken);
+        this.cookieService.set(CONSTS.CONGRESS, jwtToken.token, { path: '/' });
         // 重新保存新 token
-        this.tokenSrv.set(res.data);
+        this.tokenSrv.set(jwtToken);
         // 重新发起请求
         return next.handle(this.reAttachToken(req));
       }),
@@ -189,10 +191,10 @@ export class DefaultInterceptor implements HttpInterceptor {
       )
       .subscribe(
         res => {
-          // TODO: Mock expired value
-          res.expired = +new Date() + 1000 * 60 * 5;
-          this.refreshToking = false;
-          this.tokenSrv.set(res);
+          let jwtToken = res.data;
+          jwtToken.expired = jwtToken.expired * 1000;
+          this.cookieService.set(CONSTS.CONGRESS, jwtToken.token, { path: '/' });
+          this.tokenSrv.set(jwtToken);
         },
         () => this.toLogin()
       );
